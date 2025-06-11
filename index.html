@@ -196,6 +196,17 @@
                     </div>
                 </div>
             </div>
+             <!-- Past Bento Popularity -->
+            <div class="bg-white p-6 rounded-xl soft-shadow mt-8">
+                <h3 class="text-xl font-bold mb-4">🏆 弁当獲得ランキング</h3>
+                <div id="stats-list" class="space-y-2 mb-6">
+                    <!-- JSで累計数を生成 -->
+                </div>
+                <h3 class="text-xl font-bold mb-4 border-t pt-4">受け取り履歴</h3>
+                <div id="history-list" class="space-y-2 text-sm max-h-48 overflow-y-auto">
+                        <p class="text-gray-500">まだ受け取り履歴はありません。</p>
+                </div>
+            </div>
         </div>
         
         <!-- Admin View -->
@@ -254,7 +265,7 @@
             </div>
             <!-- Past Bento Popularity -->
             <div class="bg-white p-6 rounded-xl soft-shadow mt-8">
-                <h3 class="text-xl font-bold mb-4">過去の弁当人気投票</h3>
+                <h3 class="text-xl font-bold mb-4">過去の弁当人気投票 (管理者用)</h3>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead>
@@ -265,7 +276,7 @@
                                 <th class="py-2 px-4 text-sm font-medium text-gray-600 text-center">JOKER使用者数</th>
                             </tr>
                         </thead>
-                        <tbody id="bento-history-table-body">
+                        <tbody id="admin-bento-history-table-body">
                            <!-- JSで履歴を生成 -->
                         </tbody>
                     </table>
@@ -376,7 +387,7 @@
             systemMessage, bentoInfoCard, replayRouletteBtn, jokerStatusList, customModal, 
             modalContent, modalTitle, modalMessage, modalButtons, modalIconContainer, 
             passcodeModal, passcodeInput, passcodeError, passcodeSubmitBtn, passcodeCancelBtn,
-            lotteryModal, lotteryTitle, lotteryMessage, lotteryCards;
+            lotteryModal, lotteryTitle, lotteryMessage, lotteryCards, adminBentoHistoryTableBody;
 
         // --- グローバル変数 ---
         let currentBento = null;
@@ -514,7 +525,8 @@
 
             onSnapshot(query(bentoHistoryCol, orderBy("date", "desc")), (snapshot) => {
                  const history = snapshot.docs.map(doc => doc.data());
-                 if(bentoHistoryTableBody) updateBentoHistoryTable(history);
+                 if(bentoHistoryTableBody) updateBentoHistoryTable(history, bentoHistoryTableBody);
+                 if(adminBentoHistoryTableBody) updateBentoHistoryTable(history, adminBentoHistoryTableBody);
             });
         }
 
@@ -715,11 +727,11 @@
              });
         }
         
-        function updateBentoHistoryTable(history) {
-            if(!bentoHistoryTableBody) return;
-            bentoHistoryTableBody.innerHTML = ''; // Clear existing rows
+        function updateBentoHistoryTable(history, tableBody) {
+            if(!tableBody) return;
+            tableBody.innerHTML = ''; // Clear existing rows
             if (history.length === 0) {
-                bentoHistoryTableBody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500 py-4">履歴はありません。</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500 py-4">履歴はありません。</td></tr>';
                 return;
             }
 
@@ -734,7 +746,7 @@
                         <td class="py-3 px-4 text-center text-sm">${item.jokerUserCount}</td>
                     </tr>
                 `;
-                bentoHistoryTableBody.innerHTML += row;
+                tableBody.innerHTML += row;
             });
         }
 
@@ -1036,7 +1048,7 @@
                 const winnerCard = document.getElementById(`card-${winner.id}`);
                 winnerCard.classList.add('flipped', 'winner-card');
                 winnerCard.style.transform = 'scale(1.1)';
-                document.getElementById(`result-${winner.id}`).textContent = '🎉 当選 �';
+                document.getElementById(`result-${winner.id}`).textContent = '🎉 当選 🎉';
             }
 
             // 4. Reveal others
@@ -1157,16 +1169,12 @@
                     systemMessage.textContent = `あと${remainingVotes}人の意思表示待ちです...`;
                     systemMessage.classList.replace('bg-green-100', 'bg-yellow-100');
                     systemMessage.classList.replace('text-green-800', 'text-yellow-800');
-                } else {
-                    systemMessage.textContent = `全員の意思表示が完了しました。`;
-                    systemMessage.classList.replace('bg-yellow-100', 'bg-green-100');
-                    systemMessage.classList.replace('text-yellow-800', 'text-green-800');
                 }
             }
         }
 
         // --- 初期化 ---
-        window.onload = () => {
+        document.addEventListener('DOMContentLoaded', () => {
              // DOM要素の初期化
             userTab = document.getElementById('user-tab');
             adminTab = document.getElementById('admin-tab');
@@ -1185,6 +1193,7 @@
             statsList = document.getElementById('stats-list');
             historyList = document.getElementById('history-list');
             bentoHistoryTableBody = document.getElementById('bento-history-table-body');
+            adminBentoHistoryTableBody = document.getElementById('admin-bento-history-table-body');
             systemMessage = document.getElementById('system-message');
             bentoInfoCard = document.getElementById('bento-info-card');
             replayRouletteBtn = document.getElementById('replay-roulette-btn');
@@ -1207,9 +1216,8 @@
 
             setupEventListeners();
             setupRealtimeListeners();
-        };
+        });
 
     </script>
 </body>
 </html>
-�
