@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弁当 在庫管理・受け取りサービス</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+        .soft-shadow {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        .soft-shadow:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+        .btn {
+            transition: all 0.2s ease;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pulse {
+            animation: pulse-animation 2s infinite;
+        }
+        @keyframes pulse-animation {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+        .tab-btn.active {
+            background-color: #6366f1;
+            color: white;
+            border-color: #e5e7eb;
+        }
+        .tab-btn {
+             background-color: #f3f4f6;
+             color: #374151;
+             border-color: transparent;
+        }
+        /* Modal styles */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .modal-leave {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .modal-leave-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Hide number input arrows */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+          -webkit-appearance: none; 
+          margin: 0; 
+        }
+        input[type=number] {
+          -moz-appearance: textfield;
+        }
+        /* Card Shuffle Animation */
+        .lottery-card {
+            width: 100px;
+            height: 140px;
+            perspective: 1000px;
+            transition: transform 0.5s;
+        }
+        .lottery-card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .lottery-card.flipped .lottery-card-inner {
+            transform: rotateY(180deg);
+        }
+        .lottery-card-front, .lottery-card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+        }
+        .lottery-card-front {
+            background-color: #6366f1;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .lottery-card-back {
+            background-color: white;
+            color: black;
+            transform: rotateY(180deg);
+            flex-direction: column;
+        }
+        .winner-card .lottery-card-back {
+            background: linear-gradient(45deg, #fde047, #f97316);
+        }
+        /* Joker Effect */
+        @keyframes joker-glow {
+            0% { box-shadow: 0 0 5px #a855f7, 0 0 10px #a855f7, 0 0 15px #a855f7; }
+            50% { box-shadow: 0 0 20px #d8b4fe, 0 0 30px #d8b4fe, 0 0 40px #d8b4fe; }
+            100% { box-shadow: 0 0 5px #a855f7, 0 0 10px #a855f7, 0 0 15px #a855f7; }
+        }
+        .joker-flash {
+            animation: joker-glow 0.5s ease-in-out 3;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">弁当振分</h1>
+            <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mt-4 text-left text-sm" role="alert">
+                <p class="font-bold">説明</p>
+                <p>説明会終了1時間以内に投票お願いします。未投票者は希望しないものとして扱います。当選者は実際に持ち帰ったら、ボタンをおしてください。2ヶ月に1回だけ当選確率が10倍になるJOKERを使えます。</p>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="mb-8">
+            <div class="flex border-b border-gray-200">
+                <button id="user-tab" class="tab-btn active py-2 px-6 font-medium text-sm rounded-t-lg border-b-2 focus:outline-none">利用者画面</button>
+                <button id="admin-tab" class="tab-btn py-2 px-6 font-medium text-sm rounded-t-lg border-b-2 focus:outline-none">管理者画面</button>
+            </div>
+        </div>
+
+        <!-- User View -->
+        <div id="user-view">
+             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- 左カラム：在庫と意思表示 -->
+                <div class="lg:col-span-2">
+                    <!-- 在庫情報 -->
+                    <div id="bento-info-card" class="bg-white p-6 rounded-xl soft-shadow mb-8">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2" id="current-bento-name">弁当はまだ登録されていません</h2>
+                        <div class="flex items-baseline">
+                            <p class="text-5xl font-extrabold text-indigo-600" id="current-bento-stock">0</p>
+                            <p class="ml-2 text-xl text-gray-600">個</p>
+                        </div>
+                    </div>
+
+                    <!-- 意思表示パネル -->
+                    <div class="bg-white p-6 rounded-xl soft-shadow">
+                        <p id="system-message" class="text-sm text-center p-3 mb-4 bg-yellow-100 text-yellow-800 rounded-lg">弁当が登録されると意思表示を開始できます。</p>
+                        <div id="wish-list" class="space-y-3">
+                            <!-- JSで社員リストを生成 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右カラム：確定者と履歴 -->
+                <div>
+                    <!-- JOKER Status -->
+                     <div class="bg-white p-6 rounded-xl soft-shadow mb-8">
+                        <h3 class="text-xl font-bold mb-4">🃏 JOKER所持状況</h3>
+                        <div id="joker-status-list" class="space-y-2">
+                            <!-- JSでJOKER状況を生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 確定者リスト -->
+                    <div class="bg-white p-6 rounded-xl soft-shadow mb-8">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold">🎉 本日の弁当GET組</h3>
+                            <button id="replay-roulette-btn" class="hidden bg-gray-200 text-gray-700 text-xs font-bold py-1 px-2 rounded-md hover:bg-gray-300 btn flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7V9a1 1 0 01-2 0V3a1 1 0 011-1zm12 1a1 1 0 011 1v6a1 1 0 01-2 0V9.899a7.002 7.002 0 01-11.601-2.566 1 1 0 111.885-.666A5.002 5.002 0 0014.001 13V11a1 1 0 012 0v6a1 1 0 01-1 1H9a1 1 0 110-2h4.001v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 111.885-.666A5.002 5.002 0 0014.001 7V9a1 1 0 012 0V3a1 1 0 01-1-1h4z" clip-rule="evenodd" />
+                                </svg>
+                                再生
+                            </button>
+                        </div>
+                        <div id="takers-list" class="space-y-3">
+                            <p class="text-gray-500">まだ誰も確定していません。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Admin View -->
+        <div id="admin-view" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <!-- 管理者用パネル -->
+                    <div class="bg-white p-6 rounded-xl soft-shadow mb-8">
+                        <h2 class="text-xl font-bold mb-4 border-b pb-2">弁当の登録・リセット</h2>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-end">
+                            <div>
+                                <label for="bento-name" class="block text-sm font-medium text-gray-700">弁当の名前</label>
+                                <input type="text" id="bento-name" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                            </div>
+                            <div>
+                                <label for="bento-stock" class="block text-sm font-medium text-gray-700">入荷個数</label>
+                                <input type="number" id="bento-stock" class="mt-1 block w-full rounded-md border-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
+                            </div>
+                            <button id="register-bento-btn" class="w-full bg-indigo-500 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 btn">
+                                登録・リセット
+                            </button>
+                        </div>
+                         <p class="text-xs text-gray-500 mt-2">※ 登録・リセットボタンを押すと、現在の意思表示や確定者リストがすべてリセットされます。</p>
+                    </div>
+                    
+                    <!-- 履歴消去パネル -->
+                     <div class="bg-white p-6 rounded-xl soft-shadow">
+                        <h2 class="text-xl font-bold mb-4 border-b pb-2 text-red-600">危険な操作</h2>
+                        <div class="flex items-center justify-between mb-4">
+                             <div>
+                                <h3 class="font-bold">人気投票の履歴を消去</h3>
+                                <p class="text-sm text-gray-600 mt-1">人気投票の履歴のみを削除します。<br>ランキングや個人の獲得履歴は残ります。</p>
+                            </div>
+                            <button id="clear-popularity-history-btn" class="bg-red-500 text-white font-bold py-2 px-4 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 btn">
+                                履歴消去
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between border-t pt-4">
+                             <div>
+                                <h3 class="font-bold">全JOKERをリセット</h3>
+                                <p class="text-sm text-gray-600 mt-1">全員のJOKERを1枚にリセットします。</p>
+                            </div>
+                            <button id="reset-jokers-btn" class="bg-amber-500 text-white font-bold py-2 px-4 rounded-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 btn">
+                                JOKERリセット
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                 <!-- 意思表示状況パネル (管理者用) -->
+                <div class="bg-white p-6 rounded-xl soft-shadow">
+                    <h2 class="text-xl font-bold mb-4 border-b pb-2">現在の意思表示状況</h2>
+                    <div id="admin-wish-list" class="space-y-3">
+                        <!-- Admin wish list generated here -->
+                    </div>
+                </div>
+            </div>
+            <!-- Past Bento Popularity -->
+            <div class="bg-white p-6 rounded-xl soft-shadow mt-8">
+                <h3 class="text-xl font-bold mb-4">過去の弁当人気投票</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="bg-gray-50 border-b border-gray-200">
+                                <th class="py-2 px-4 text-sm font-medium text-gray-600">日付</th>
+                                <th class="py-2 px-4 text-sm font-medium text-gray-600">弁当の種類</th>
+                                <th class="py-2 px-4 text-sm font-medium text-gray-600 text-center">希望者数</th>
+                                <th class="py-2 px-4 text-sm font-medium text-gray-600 text-center">JOKER使用者数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bento-history-table-body">
+                           <!-- JSで履歴を生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer class="text-center mt-12 text-sm text-gray-500">
+            <p>&copy; <span id="year"></span> 社内弁当管理システム</p>
+        </footer>
+    </div>
+    
+    <!-- Notification Modal -->
+    <div id="custom-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50 flex items-center justify-center">
+        <div id="modal-content" class="relative mx-auto p-5 border w-11/12 md:max-w-md shadow-lg rounded-md bg-white modal-enter">
+            <div class="mt-3 text-center">
+                <div id="modal-icon-container" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                    <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900 mt-4">通知</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="modal-message" class="text-sm text-gray-600"></p>
+                </div>
+                <div id="modal-buttons" class="items-center px-4 py-3">
+                    <button id="modal-ok-btn" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Passcode Modal -->
+    <div id="passcode-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50 flex items-center justify-center">
+        <div class="relative mx-auto p-5 border w-11/12 md:max-w-sm shadow-lg rounded-md bg-white modal-enter">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100">
+                     <svg class="h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-4">管理者パスコード</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500 mb-4">4桁のパスコードを入力してください。</p>
+                    <input type="text" id="passcode-input" class="text-center text-3xl tracking-[0.5em] w-full bg-gray-100 rounded-md p-2" inputmode="numeric" pattern="[0-9]*" maxlength="4" />
+                    <p id="passcode-error" class="text-red-500 text-sm h-4 mt-2"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                     <div class="flex gap-4">
+                        <button id="passcode-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">キャンセル</button>
+                        <button id="passcode-submit-btn" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">決定</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Lottery Modal -->
+    <div id="lottery-modal" class="fixed inset-0 bg-gray-800 bg-opacity-90 hidden z-50 flex items-center justify-center p-4">
+         <div class="relative mx-auto p-6 w-full max-w-2xl text-center">
+             <h3 id="lottery-title" class="text-3xl font-bold text-white mb-4">運命の抽選！</h3>
+             <p id="lottery-message" class="text-yellow-300 mt-2 mb-6">結果発表！</p>
+             <div id="lottery-cards" class="flex flex-wrap gap-4 justify-center">
+                <!-- Cards will be generated here -->
+             </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // Firebase モジュールのインポート
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, writeBatch, runTransaction, getDocs, addDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+        
+        // あなたのウェブアプリのFirebase設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyD6atYGL6U4a6-20qz_g1NCmRKwfA8aEds",
+            authDomain: "bento-app-2025.firebaseapp.com",
+            projectId: "bento-app-2025",
+            storageBucket: "bento-app-2025.appspot.com",
+            messagingSenderId: "157224537828",
+            appId: "1:157224537828:web:a8388a63eff8e451bba6f1",
+            measurementId: "G-PBBMCG5L3Y"
+        };
+
+        // アプリの初期化
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'bento-app-default';
+
+        // --- 定数定義 ---
+        const MEMBERS = [
+            { id: 'kono', name: '河野先生', priority: 1, weight: Math.sqrt(29) },
+            { id: 'matsumura', name: '松村先生', priority: 2, weight: Math.sqrt(17) },
+            { id: 'suzuki', name: '鈴木先生', priority: 3, weight: Math.sqrt(14) },
+            { id: 'ito', name: '伊藤先生', priority: 4, weight: Math.sqrt(10) },
+            { id: 'hori', name: '堀先生', priority: 5, weight: Math.sqrt(6) },
+            { id: 'kasuga', name: '春日先生', priority: 6, weight: Math.sqrt(5) },
+            { id: 'miyake', name: '三宅先生', priority: 7, weight: Math.sqrt(3) },
+        ];
+        const ADMIN_PASSCODE = '1322';
+
+        // --- DOM要素 ---
+        let userTab, adminTab, userView, adminView, bentoNameInput, bentoStockInput, registerBentoBtn, 
+            clearPopularityHistoryBtn, resetJokersBtn, currentBentoName, currentBentoStock, 
+            wishList, adminWishList, takersList, statsList, historyList, bentoHistoryTableBody, 
+            systemMessage, bentoInfoCard, replayRouletteBtn, jokerStatusList, customModal, 
+            modalContent, modalTitle, modalMessage, modalButtons, modalIconContainer, 
+            passcodeModal, passcodeInput, passcodeError, passcodeSubmitBtn, passcodeCancelBtn,
+            lotteryModal, lotteryTitle, lotteryMessage, lotteryCards;
+
+        // --- グローバル変数 ---
+        let currentBento = null;
+        let wishes = new Map();
+        let takers = new Map();
+        let jokers = new Map();
+        let determinationInProgress = false;
+        let isAdminAuthenticated = false;
+        let isLotteryRunning = false;
+
+
+        // --- Firestoreコレクション参照 ---
+        const bentoDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bento/current');
+        const wishesCol = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
+        const takersCol = collection(db, 'artifacts', appId, 'public', 'data', 'takers');
+        const statsCol = collection(db, 'artifacts', appId, 'public', 'data', 'stats');
+        const historyCol = collection(db, 'artifacts', appId, 'public', 'data', 'history');
+        const jokersCol = collection(db, 'artifacts', appId, 'public', 'data', 'jokers');
+        const bentoHistoryCol = collection(db, 'artifacts', appId, 'public', 'data', 'bentoHistory');
+
+        // --- モーダル関数 ---
+        function showModal(message) {
+            modalTitle.textContent = '通知';
+            modalMessage.textContent = message;
+            modalIconContainer.innerHTML = `<svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+            modalIconContainer.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100';
+            
+            modalButtons.innerHTML = `<button id="modal-ok-btn" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">OK</button>`;
+            document.getElementById('modal-ok-btn').addEventListener('click', hideModal);
+
+            customModal.classList.remove('hidden');
+            modalContent.classList.remove('modal-leave', 'modal-leave-active');
+            modalContent.classList.add('modal-enter-active');
+        }
+
+        function showConfirmationModal(message, onConfirm) {
+            modalTitle.textContent = '確認';
+            modalMessage.textContent = message;
+            modalIconContainer.innerHTML = `<svg class="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>`;
+            modalIconContainer.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100';
+            
+            modalButtons.innerHTML = `
+                <div class="flex gap-4">
+                    <button id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">キャンセル</button>
+                    <button id="modal-confirm-btn" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">実行する</button>
+                </div>
+            `;
+            document.getElementById('modal-cancel-btn').addEventListener('click', hideModal);
+            document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+                hideModal();
+                onConfirm();
+            });
+
+            customModal.classList.remove('hidden');
+            modalContent.classList.remove('modal-leave', 'modal-leave-active');
+            modalContent.classList.add('modal-enter-active');
+        }
+
+        function hideModal() {
+            modalContent.classList.remove('modal-enter-active');
+            modalContent.classList.add('modal-leave-active');
+            setTimeout(() => {
+                customModal.classList.add('hidden');
+            }, 300);
+        }
+
+        function showPasscodeModal() {
+            passcodeModal.classList.remove('hidden');
+            passcodeInput.value = '';
+            passcodeError.textContent = '';
+            passcodeInput.focus();
+        }
+
+        function hidePasscodeModal() {
+            passcodeModal.classList.add('hidden');
+        }
+
+
+        // --- リアルタイムリスナー設定 ---
+        function setupRealtimeListeners() {
+            onSnapshot(bentoDocRef, (docSnap) => {
+                const oldBentoData = currentBento;
+                if (docSnap.exists()) {
+                    currentBento = { id: docSnap.id, ...docSnap.data() };
+                    updateBentoInfoUI();
+
+                    if (!oldBentoData || oldBentoData.timestamp?.seconds !== currentBento.timestamp?.seconds) {
+                         bentoInfoCard.classList.add('pulse');
+                         setTimeout(() => bentoInfoCard.classList.remove('pulse'), 2000);
+                    }
+
+                    if (currentBento.lotteryCompleted) {
+                        replayRouletteBtn.classList.remove('hidden');
+                    } else {
+                        replayRouletteBtn.classList.add('hidden');
+                    }
+                } else {
+                    currentBento = null;
+                    resetUI();
+                }
+                updateWishListUI();
+                updateAdminWishListUI();
+            });
+
+            onSnapshot(wishesCol, (snapshot) => {
+                wishes.clear();
+                snapshot.docs.forEach(doc => wishes.set(doc.id, doc.data()));
+                updateWishListUI();
+                updateAdminWishListUI();
+                determineTakers();
+            });
+
+            onSnapshot(takersCol, (snapshot) => {
+                takers.clear();
+                snapshot.docs.forEach(doc => takers.set(doc.id, doc.data()));
+                updateTakersListUI();
+            });
+            
+            onSnapshot(statsCol, (snapshot) => {
+                const stats = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                if(statsList) updateStatsListUI(stats);
+            });
+
+            onSnapshot(historyCol, (snapshot) => {
+                const history = snapshot.docs.map(doc => doc.data()).sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+                if(historyList) updateHistoryListUI(history);
+            });
+
+            onSnapshot(jokersCol, (snapshot) => {
+                jokers.clear();
+                snapshot.docs.forEach(doc => jokers.set(doc.id, doc.data()));
+                updateJokerStatusUI();
+                updateWishListUI(); // JOKER status might affect buttons
+            });
+
+            onSnapshot(query(bentoHistoryCol, orderBy("date", "desc")), (snapshot) => {
+                 const history = snapshot.docs.map(doc => doc.data());
+                 if(bentoHistoryTableBody) updateBentoHistoryTable(history);
+            });
+        }
+
+        // --- UI更新関数 ---
+        function updateBentoInfoUI() {
+            if (currentBento) {
+                currentBentoName.textContent = currentBento.name;
+                currentBentoStock.textContent = currentBento.current_stock;
+            }
+        }
+        
+        function resetUI() {
+            currentBentoName.textContent = '弁当はまだ登録されていません';
+            currentBentoStock.textContent = '0';
+            systemMessage.textContent = '弁当が登録されると意思表示を開始できます。';
+            systemMessage.classList.replace('bg-green-100', 'bg-yellow-100');
+            systemMessage.classList.replace('text-green-800', 'text-yellow-800');
+            wishList.innerHTML = '';
+            adminWishList.innerHTML = '<p class="text-gray-500">弁当が登録されていません。</p>';
+            takersList.innerHTML = '<p class="text-gray-500">まだ誰も確定していません。</p>';
+            replayRouletteBtn.classList.add('hidden');
+        }
+        
+        function updateJokerStatusUI(){
+            if(!jokerStatusList) return;
+            jokerStatusList.innerHTML = '';
+            MEMBERS.forEach(member => {
+                 const jokerData = jokers.get(member.id);
+                 const hasJoker = (jokerData?.count ?? 1) > 0;
+                 const div = document.createElement('div');
+                 div.className = 'flex justify-between items-center text-sm';
+                 div.innerHTML = `
+                    <span>${member.name}</span>
+                    <span class="font-bold ${hasJoker ? 'text-green-600' : 'text-gray-400'}">${hasJoker ? '所持' : 'なし'}</span>
+                 `;
+                 jokerStatusList.appendChild(div);
+            });
+        }
+
+        function updateWishListUI() {
+            if(!wishList) return;
+            wishList.innerHTML = '';
+            const areTakersDecided = takers.size > 0;
+            const noBento = !currentBento || currentBento.current_stock <= 0;
+
+            MEMBERS.forEach(member => {
+                const wishData = wishes.get(member.id);
+                const li = document.createElement('div');
+                li.id = `wish-item-${member.id}`;
+                li.className = `p-3 rounded-lg flex items-center justify-between transition`;
+
+                let statusHtml = '';
+                let buttonHtml = '';
+
+                if (wishData) {
+                    li.classList.add('bg-gray-200');
+                    statusHtml = `<span class="text-sm font-bold text-gray-700">表明済み</span>`;
+                } else {
+                    li.classList.add('bg-gray-100');
+                }
+
+                if (!wishData && !areTakersDecided && !noBento) {
+                    const twoMonths = 2 * 30 * 24 * 60 * 60 * 1000;
+                    const jokerData = jokers.get(member.id);
+                    const lastUsed = jokerData?.lastUsed?.toDate() ?? new Date(0);
+                    const canUseJoker = (new Date() - lastUsed) > twoMonths;
+                    
+                    const jokerButtonHtml = canUseJoker
+                        ? `<button data-id="${member.id}" class="joker-btn bg-violet-500 text-white text-sm font-bold py-1 px-3 rounded-full hover:bg-violet-600 btn">JOKERを使う</button>`
+                        : `<button class="bg-gray-400 text-white text-sm font-bold py-1 px-3 rounded-full btn" disabled title="使用済み">JOKER</button>`;
+
+                    buttonHtml = `
+                        <div class="flex flex-wrap gap-2 justify-end">
+                            <button data-id="${member.id}" class="wish-btn bg-teal-500 text-white text-sm font-bold py-1 px-2 rounded-full hover:bg-teal-600 btn">希望</button>
+                             ${jokerButtonHtml}
+                            <button data-id="${member.id}" class="leftover-btn bg-gray-400 text-white text-sm font-bold py-1 px-2 rounded-full hover:bg-gray-500 btn">余り希望</button>
+                            <button data-id="${member.id}" class="no-wish-btn bg-slate-400 text-white text-sm font-bold py-1 px-2 rounded-full hover:bg-slate-500 btn">不要</button>
+                        </div>
+                    `;
+                }
+
+                li.innerHTML = `
+                    <span class="font-medium">${member.name}</span>
+                    <div class="flex-grow"></div>
+                    ${statusHtml}
+                    ${buttonHtml}
+                `;
+                wishList.appendChild(li);
+            });
+        }
+        
+        function updateAdminWishListUI() {
+            if(!adminWishList) return;
+            adminWishList.innerHTML = '';
+            
+            if (!currentBento) {
+                adminWishList.innerHTML = '<p class="text-gray-500">弁当が登録されていません。</p>';
+                return;
+            }
+
+            MEMBERS.forEach(member => {
+                const wishData = wishes.get(member.id);
+                const li = document.createElement('div');
+                li.className = `p-3 rounded-lg flex items-center justify-between transition`;
+                let statusHtml = '<span class="text-sm text-gray-400">未表明</span>';
+
+                if (wishData) {
+                     if (wishData.status === 'wishing') {
+                        li.classList.add('bg-blue-100');
+                        statusHtml = `<span class="text-sm font-bold text-blue-600">${wishData.jokerUsed ? 'JOKER希望' : '希望'}</span>`;
+                    } else if (wishData.status === 'leftover') {
+                        li.classList.add('bg-yellow-100');
+                        statusHtml = `<span class="text-sm font-bold text-yellow-700">余り希望</span>`;
+                    } else if (wishData.status === 'not_wishing') {
+                        li.classList.add('bg-gray-200');
+                        statusHtml = `<span class="text-sm font-bold text-gray-500">不要</span>`;
+                    }
+                } else {
+                    li.classList.add('bg-gray-50');
+                }
+
+                li.innerHTML = `
+                    <span class="font-medium">${member.name}</span>
+                    ${statusHtml}
+                `;
+                adminWishList.appendChild(li);
+            });
+        }
+        
+        function updateTakersListUI() {
+            if(!takersList) return;
+            takersList.innerHTML = '';
+            if (takers.size === 0) {
+                takersList.innerHTML = '<p class="text-gray-500">まだ誰も確定していません。</p>';
+                return;
+            }
+
+            const sortedTakers = Array.from(takers.entries()).sort((a,b) => a[1].priority - b[1].priority);
+            
+            sortedTakers.forEach(([id, takerData]) => {
+                const div = document.createElement('div');
+                let statusOrButtonHtml = '';
+
+                if (takerData.taken) {
+                    div.className = 'p-3 rounded-lg flex items-center justify-between bg-green-100 text-gray-800';
+                    statusOrButtonHtml = `<span class="text-sm font-bold text-green-800">受け取り完了</span>`;
+                } else {
+                    div.className = 'p-3 rounded-lg flex items-center justify-between bg-yellow-100';
+                    statusOrButtonHtml = `<button data-id="${id}" class="take-btn bg-sky-500 text-white text-sm font-bold py-1 px-3 rounded-full hover:bg-sky-600 btn">未受け取り</button>`;
+                }
+
+                div.innerHTML = `
+                    <div>
+                        <span class="font-bold text-gray-800">${takerData.name}</span>
+                    </div>
+                    ${statusOrButtonHtml}
+                `;
+                takersList.appendChild(div);
+            });
+        }
+
+        function updateStatsListUI(stats) {
+            if(!statsList) return;
+            statsList.innerHTML = '';
+            if (!stats || stats.length === 0) {
+                 statsList.innerHTML = '<p class="text-gray-500">まだ誰も受け取っていません。</p>';
+                 return;
+            }
+
+            const sortedStats = stats.sort((a,b) => b.total_taken - a.total_taken);
+            sortedStats.forEach(stat => {
+                 const member = MEMBERS.find(m => m.id === stat.id);
+                 if (member) {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center text-sm';
+                    div.innerHTML = `
+                        <span>${member.name}</span>
+                        <span class="font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">${stat.total_taken} 回</span>
+                    `;
+                    statsList.appendChild(div);
+                }
+            });
+        }
+        
+        function updateHistoryListUI(history) {
+             if(!historyList) return;
+             historyList.innerHTML = '';
+             if (!history || history.length === 0) {
+                 historyList.innerHTML = '<p class="text-gray-500">まだ受け取り履歴はありません。</p>';
+                 return;
+             }
+             history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'p-1.5 bg-gray-50 rounded';
+                const date = item.timestamp.toDate().toLocaleString('ja-JP');
+                div.textContent = `${date}: ${item.name}が${item.bento_name}を受け取り`;
+                historyList.appendChild(div);
+             });
+        }
+        
+        function updateBentoHistoryTable(history) {
+            if(!bentoHistoryTableBody) return;
+            bentoHistoryTableBody.innerHTML = ''; // Clear existing rows
+            if (history.length === 0) {
+                bentoHistoryTableBody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500 py-4">履歴はありません。</td></tr>';
+                return;
+            }
+
+            history.forEach(item => {
+                const date = item.date.toDate();
+                const formattedDate = `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+                const row = `
+                    <tr class="border-b border-gray-200">
+                        <td class="py-3 px-4 text-sm">${formattedDate}</td>
+                        <td class="py-3 px-4 text-sm">${item.name}</td>
+                        <td class="py-3 px-4 text-center text-sm">${item.wisherCount}</td>
+                        <td class="py-3 px-4 text-center text-sm">${item.jokerUserCount}</td>
+                    </tr>
+                `;
+                bentoHistoryTableBody.innerHTML += row;
+            });
+        }
+
+
+        // --- イベントハンドラ ---
+        
+        function setupEventListeners() {
+            // Tab switching
+            userTab.addEventListener('click', () => {
+                userView.classList.remove('hidden');
+                adminView.classList.add('hidden');
+                userTab.classList.add('active');
+                adminTab.classList.remove('active');
+            });
+
+            adminTab.addEventListener('click', () => {
+                if (isAdminAuthenticated) {
+                    adminView.classList.remove('hidden');
+                    userView.classList.add('hidden');
+                    adminTab.classList.add('active');
+                    userTab.classList.remove('active');
+                } else {
+                    showPasscodeModal();
+                }
+            });
+
+            // Passcode modal
+            passcodeSubmitBtn.addEventListener('click', () => {
+                if (passcodeInput.value === ADMIN_PASSCODE) {
+                    isAdminAuthenticated = true;
+                    hidePasscodeModal();
+                    adminTab.click();
+                } else {
+                    passcodeError.textContent = 'パスコードが違います。';
+                    passcodeInput.value = '';
+                    passcodeInput.focus();
+                }
+            });
+
+            passcodeCancelBtn.addEventListener('click', hidePasscodeModal);
+            
+            passcodeInput.addEventListener('input', () => {
+                passcodeError.textContent = '';
+                if (passcodeInput.value.length === 4) {
+                    passcodeSubmitBtn.click();
+                }
+            });
+
+            // Register bento
+            registerBentoBtn.addEventListener('click', async () => {
+                const name = bentoNameInput.value.trim();
+                const stock = parseInt(bentoStockInput.value, 10);
+
+                if (!name || isNaN(stock) || stock <= 0) {
+                    showModal('有効な弁当の名前と個数を入力してください。');
+                    return;
+                }
+                
+                try {
+                    if (currentBento && wishes.size > 0) {
+                        const wisherCount = Array.from(wishes.values()).filter(w => w.status === 'wishing').length;
+                        const jokerUserCount = Array.from(wishes.values()).filter(w => w.jokerUsed).length;
+                        
+                        const historyData = {
+                            name: currentBento.name,
+                            date: currentBento.timestamp,
+                            wisherCount: wisherCount,
+                            jokerUserCount: jokerUserCount
+                        };
+                        
+                        await addDoc(bentoHistoryCol, historyData);
+                    }
+
+                    const batch = writeBatch(db);
+                    const wishesSnapshot = await getDocs(wishesCol);
+                    wishesSnapshot.forEach(doc => batch.delete(doc.ref));
+                    const takersSnapshot = await getDocs(takersCol);
+                    takersSnapshot.forEach(doc => batch.delete(doc.ref));
+                    
+                    const newBentoData = {
+                        name: name,
+                        initial_stock: stock,
+                        current_stock: stock,
+                        timestamp: new Date(),
+                        lotteryCompleted: false,
+                        lotteryApplicants: [],
+                        lotteryWinners: []
+                    };
+                    batch.set(bentoDocRef, newBentoData);
+
+                    await batch.commit();
+                    
+                    bentoNameInput.value = '';
+                    bentoStockInput.value = '';
+                    showModal(`${name}を${stock}個で登録しました。`);
+                } catch (error) {
+                    console.error("弁当登録エラー:", error);
+                    showModal("弁当の登録中にエラーが発生しました。");
+                }
+            });
+
+            // Clear Popularity history
+            clearPopularityHistoryBtn.addEventListener('click', () => {
+                showConfirmationModal('本当に人気投票の履歴を全て消去しますか？ランキングや個人の獲得履歴は残ります。', async () => {
+                    clearPopularityHistoryBtn.disabled = true;
+                    
+                    try {
+                        const batch = writeBatch(db);
+                        const bentoHistorySnapshot = await getDocs(bentoHistoryCol);
+                        bentoHistorySnapshot.forEach(doc => batch.delete(doc.ref));
+                        await batch.commit();
+                        showModal('人気投票の履歴が消去されました。');
+                    } catch (error) {
+                        console.error("人気投票履歴の消去に失敗しました: ", error);
+                        showModal('人気投票履歴の消去に失敗しました。');
+                    } finally {
+                        clearPopularityHistoryBtn.disabled = false;
+                    }
+                });
+            });
+            
+            // Reset Jokers
+            resetJokersBtn.addEventListener('click', () => {
+                showConfirmationModal('本当に全員のJOKERをリセットしますか？', async () => {
+                    resetJokersBtn.disabled = true;
+                    const batch = writeBatch(db);
+                    MEMBERS.forEach(member => {
+                        const jokerRef = doc(jokersCol, member.id);
+                        batch.set(jokerRef, { count: 1, lastUsed: new Date(0) });
+                    });
+                    await batch.commit();
+                    showModal('全員のJOKERがリセットされました。');
+                    resetJokersBtn.disabled = false;
+                });
+            });
+
+            // Wish button
+            wishList.addEventListener('click', async (e) => {
+                const target = e.target;
+                const userId = target.dataset.id;
+                if (!userId) return;
+
+                const member = MEMBERS.find(m => m.id === userId);
+                if (!member) return;
+                
+                const buttonContainer = target.parentElement;
+
+                if (target.classList.contains('wish-btn') || target.classList.contains('joker-btn') || target.classList.contains('leftover-btn') || target.classList.contains('no-wish-btn')) {
+                    buttonContainer.innerHTML = '<span class="text-sm text-gray-500">処理中...</span>';
+                    
+                    let status = 'not_wishing';
+                    let jokerUsed = false;
+                    if(target.classList.contains('wish-btn')) status = 'wishing';
+                    if(target.classList.contains('joker-btn')) {
+                        status = 'wishing';
+                        jokerUsed = true;
+                        const li = document.getElementById(`wish-item-${userId}`);
+                        li.classList.add('joker-flash');
+                        await new Promise(r => setTimeout(r, 1500));
+                        const jokerRef = doc(jokersCol, userId);
+                        await setDoc(jokerRef, { count: 0, lastUsed: new Date() }, { merge: true });
+                    }
+                    if(target.classList.contains('leftover-btn')) status = 'leftover';
+                    if(target.classList.contains('no-wish-btn')) status = 'not_wishing';
+
+                    await setDoc(doc(wishesCol, userId), {
+                        name: member.name,
+                        priority: member.priority,
+                        status: status,
+                        jokerUsed: jokerUsed,
+                        timestamp: new Date()
+                    });
+                }
+            });
+            
+            // Take bento button
+            takersList.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('take-btn')) {
+                    const takerId = e.target.dataset.id;
+                    e.target.disabled = true;
+                    
+                    try {
+                        await runTransaction(db, async (transaction) => {
+                            const bentoSnap = await transaction.get(bentoDocRef);
+                            const takerSnap = await transaction.get(doc(takersCol, takerId));
+                            const statDocRef = doc(statsCol, takerId);
+                            const statSnap = await transaction.get(statDocRef);
+
+                            if (!bentoSnap.exists() || bentoSnap.data().current_stock <= 0) throw "弁当の在庫がありません。";
+                            if (!takerSnap.exists() || takerSnap.data().taken) throw "すでに受け取り済みか、対象者ではありません。";
+
+                            transaction.update(bentoDocRef, { current_stock: bentoSnap.data().current_stock - 1 });
+                            transaction.update(doc(takersCol, takerId), { taken: true });
+
+                            const newTotal = (statSnap.exists() ? statSnap.data().total_taken : 0) + 1;
+                            transaction.set(statDocRef, { total_taken: newTotal, name: takerSnap.data().name }, { merge: true });
+
+                            const historyDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+                            transaction.set(historyDocRef, {
+                                userId: takerId,
+                                name: takerSnap.data().name,
+                                bento_name: bentoSnap.data().name,
+                                timestamp: new Date()
+                            });
+                        });
+                    } catch (error) {
+                        console.error("受け取り処理中にエラーが発生しました: ", error);
+                        showModal("エラーが発生しました：" + error);
+                    }
+                }
+            });
+            
+            // Replay button
+            replayRouletteBtn.addEventListener('click', () => {
+                if (currentBento && currentBento.lotteryCompleted) {
+                    runLotteryProcess(currentBento.lotteryApplicants, currentBento.lotteryWinners, true);
+                }
+            });
+
+            // Modal close
+            customModal.addEventListener('click', (e) => {
+                if (e.target === customModal) {
+                    hideModal();
+                }
+            });
+        }
+        
+        // --- Lottery Logic ---
+
+        function selectWinners(applicants, count) {
+            let currentApplicants = [...applicants];
+            let winners = [];
+            for (let i = 0; i < count; i++) {
+                 let weightedApplicants = currentApplicants.map(p => {
+                    const wish = wishes.get(p.id);
+                    const weight = wish && wish.jokerUsed ? p.weight * 10 : p.weight;
+                    return {...p, finalWeight: weight};
+                 });
+
+                const totalWeight = weightedApplicants.reduce((sum, p) => sum + p.finalWeight, 0);
+                if (totalWeight === 0) break;
+                
+                let random = Math.random() * totalWeight;
+                for (const applicant of weightedApplicants) {
+                    random -= applicant.finalWeight;
+                    if (random < 0) {
+                        winners.push(applicant);
+                        currentApplicants = currentApplicants.filter(p => p.id !== applicant.id);
+                        break;
+                    }
+                }
+            }
+            return winners;
+        }
+
+        async function runLotteryProcess(applicants, preselectedWinners, isReplay = false) {
+            if (isLotteryRunning) return;
+            isLotteryRunning = true;
+
+            lotteryModal.classList.remove('hidden');
+            lotteryTitle.textContent = isReplay ? '抽選結果の再生' : '運命の抽選！';
+            if (replayRouletteBtn) replayRouletteBtn.disabled = true;
+
+            // 1. Create cards
+            lotteryCards.innerHTML = '';
+            applicants.forEach(applicant => {
+                const card = document.createElement('div');
+                card.id = `card-${applicant.id}`;
+                card.className = 'lottery-card';
+                card.innerHTML = `
+                    <div class="lottery-card-inner">
+                        <div class="lottery-card-front">?</div>
+                        <div class="lottery-card-back">
+                            <span class="font-bold text-lg">${applicant.name}</span>
+                            <span id="result-${applicant.id}" class="text-sm font-medium"></span>
+                        </div>
+                    </div>
+                `;
+                lotteryCards.appendChild(card);
+            });
+            
+            // 2. Shuffle animation
+            lotteryMessage.textContent = 'シャッフル中...';
+            const cards = Array.from(lotteryCards.children);
+            await new Promise(r => setTimeout(r, 100)); // allow cards to render
+            for(let i=0; i<3; i++) {
+                 await new Promise(r => setTimeout(r, 300));
+                 cards.sort(() => Math.random() - 0.5);
+                 cards.forEach(card => lotteryCards.appendChild(card));
+            }
+            await new Promise(r => setTimeout(r, 500));
+
+            // 3. Reveal winners
+            for (let i = 0; i < preselectedWinners.length; i++) {
+                const winner = preselectedWinners[i];
+                lotteryMessage.textContent = `${i + 1}人目の当選者は...`;
+                await new Promise(r => setTimeout(r, 1500));
+                
+                const winnerCard = document.getElementById(`card-${winner.id}`);
+                winnerCard.classList.add('flipped', 'winner-card');
+                winnerCard.style.transform = 'scale(1.1)';
+                document.getElementById(`result-${winner.id}`).textContent = '🎉 当選 �';
+            }
+
+            // 4. Reveal others
+            lotteryMessage.textContent = '結果発表！';
+            await new Promise(r => setTimeout(r, 1000));
+            applicants.forEach(applicant => {
+                const isWinner = preselectedWinners.some(w => w.id === applicant.id);
+                if (!isWinner) {
+                    const card = document.getElementById(`card-${applicant.id}`);
+                    card.classList.add('flipped');
+                     document.getElementById(`result-${applicant.id}`).textContent = '残念...';
+                }
+            });
+
+            // 5. Clean up
+            await new Promise(r => setTimeout(r, 4000));
+            lotteryModal.classList.add('hidden');
+            if(replayRouletteBtn) replayRouletteBtn.disabled = false;
+            
+            if (!isReplay) {
+                await saveTakers(applicants, preselectedWinners);
+            }
+            isLotteryRunning = false;
+        }
+        
+        async function saveTakers(applicants, winners) {
+            try {
+                const batch = writeBatch(db);
+                winners.forEach(taker => {
+                    const member = MEMBERS.find(m => m.id === taker.id);
+                    if (member) {
+                        batch.set(doc(takersCol, member.id), {
+                            name: member.name,
+                            priority: member.priority,
+                            taken: false,
+                            timestamp: new Date()
+                        });
+                    }
+                });
+                
+                const lotteryResult = {
+                    lotteryCompleted: true,
+                    lotteryApplicants: applicants.map(a => ({ id: a.id, name: a.name })), 
+                    lotteryWinners: winners.map(w => ({ id: w.id, name: w.name }))
+                };
+                batch.update(bentoDocRef, lotteryResult);
+
+                await batch.commit();
+
+            } catch (error) {
+                console.error("確定者の書き込みに失敗:", error);
+                showModal("確定者の決定処理中にエラーが発生しました。");
+            } finally {
+                determinationInProgress = false; 
+            }
+        }
+
+        // --- コアロジック ---
+        async function determineTakers() {
+            if (determinationInProgress || !currentBento || currentBento.lotteryCompleted) {
+                return;
+            }
+
+            const totalVotes = wishes.size;
+            const totalMembers = MEMBERS.length;
+
+            if (totalVotes === totalMembers) {
+                determinationInProgress = true;
+                
+                systemMessage.textContent = '全員の意思表示が完了しました。抽選処理中です...';
+                systemMessage.classList.replace('bg-yellow-100', 'bg-green-100');
+                systemMessage.classList.replace('text-yellow-800', 'text-green-800');
+
+                const stock = currentBento.initial_stock;
+                let finalTakers = [];
+
+                const wishingMembers = Array.from(wishes.values())
+                    .filter(w => w.status === 'wishing')
+                    .map(wisher => MEMBERS.find(m => m.priority === wisher.priority))
+                    .sort((a, b) => a.priority - b.priority);
+
+                const leftoverMembers = Array.from(wishes.values())
+                    .filter(w => w.status === 'leftover')
+                    .map(wisher => MEMBERS.find(m => m.priority === wisher.priority))
+                    .sort((a, b) => a.priority - b.priority);
+
+                if (wishingMembers.length === 0 && leftoverMembers.length === 0) {
+                     await updateDoc(bentoDocRef, { lotteryCompleted: true });
+                     determinationInProgress = false;
+                     return;
+                }
+                
+                if (wishingMembers.length >= stock) {
+                    // Lottery among wishing members
+                    const winners = selectWinners(wishingMembers, stock);
+                    runLotteryProcess(wishingMembers, winners);
+                } else {
+                    // All wishing members get a bento
+                    finalTakers = [...wishingMembers];
+                    let remainingStock = stock - wishingMembers.length;
+
+                    if (remainingStock > 0 && leftoverMembers.length > 0) {
+                        if (leftoverMembers.length <= remainingStock) {
+                            // All leftover members get a bento
+                            finalTakers.push(...leftoverMembers);
+                        } else {
+                            // Lottery among leftover members for remaining stock
+                            const leftoverWinners = selectWinners(leftoverMembers, remainingStock);
+                            finalTakers.push(...leftoverWinners);
+                            // No lottery animation for leftovers to keep it simple
+                        }
+                    }
+                    await saveTakers(wishingMembers.concat(leftoverMembers), finalTakers);
+                }
+            } else if (currentBento && totalVotes >= 0) {
+                const remainingVotes = totalMembers - totalVotes;
+                 if (remainingVotes > 0) {
+                    systemMessage.textContent = `あと${remainingVotes}人の意思表示待ちです...`;
+                    systemMessage.classList.replace('bg-green-100', 'bg-yellow-100');
+                    systemMessage.classList.replace('text-green-800', 'text-yellow-800');
+                } else {
+                    systemMessage.textContent = `全員の意思表示が完了しました。`;
+                    systemMessage.classList.replace('bg-yellow-100', 'bg-green-100');
+                    systemMessage.classList.replace('text-yellow-800', 'text-green-800');
+                }
+            }
+        }
+
+        // --- 初期化 ---
+        window.onload = () => {
+             // DOM要素の初期化
+            userTab = document.getElementById('user-tab');
+            adminTab = document.getElementById('admin-tab');
+            userView = document.getElementById('user-view');
+            adminView = document.getElementById('admin-view');
+            bentoNameInput = document.getElementById('bento-name');
+            bentoStockInput = document.getElementById('bento-stock');
+            registerBentoBtn = document.getElementById('register-bento-btn');
+            clearPopularityHistoryBtn = document.getElementById('clear-popularity-history-btn');
+            resetJokersBtn = document.getElementById('reset-jokers-btn');
+            currentBentoName = document.getElementById('current-bento-name');
+            currentBentoStock = document.getElementById('current-bento-stock');
+            wishList = document.getElementById('wish-list');
+            adminWishList = document.getElementById('admin-wish-list');
+            takersList = document.getElementById('takers-list');
+            statsList = document.getElementById('stats-list');
+            historyList = document.getElementById('history-list');
+            bentoHistoryTableBody = document.getElementById('bento-history-table-body');
+            systemMessage = document.getElementById('system-message');
+            bentoInfoCard = document.getElementById('bento-info-card');
+            replayRouletteBtn = document.getElementById('replay-roulette-btn');
+            jokerStatusList = document.getElementById('joker-status-list');
+            customModal = document.getElementById('custom-modal');
+            modalContent = document.getElementById('modal-content');
+            modalTitle = document.getElementById('modal-title');
+            modalMessage = document.getElementById('modal-message');
+            modalButtons = document.getElementById('modal-buttons');
+            modalIconContainer = document.getElementById('modal-icon-container');
+            passcodeModal = document.getElementById('passcode-modal');
+            passcodeInput = document.getElementById('passcode-input');
+            passcodeError = document.getElementById('passcode-error');
+            passcodeSubmitBtn = document.getElementById('passcode-submit-btn');
+            passcodeCancelBtn = document.getElementById('passcode-cancel-btn');
+            lotteryModal = document.getElementById('lottery-modal');
+            lotteryTitle = document.getElementById('lottery-title');
+            lotteryMessage = document.getElementById('lottery-message');
+            lotteryCards = document.getElementById('lottery-cards');
+
+            setupEventListeners();
+            setupRealtimeListeners();
+        };
+
+    </script>
+</body>
+</html>
+�
